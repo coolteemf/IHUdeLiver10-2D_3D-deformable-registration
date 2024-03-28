@@ -1,0 +1,9 @@
+numpy
+deepdrr
+nibabel
+scikit-image
+matplotlib
+pynrrd
+scipy
+torch
+json
