@@ -1,4 +1,6 @@
 numpy
+cupy-cuda12x
+cuda-python
 deepdrr
 nibabel
 scikit-image
@@ -6,4 +8,3 @@ matplotlib
 pynrrd
 scipy
 torch
-json
