@@ -172,15 +172,15 @@ if __name__ == "__main__":
                         help='Size of the pixel.')
     parser.add_argument('--projection_size', nargs='+', type=int, default=(512, 512),
                         help='Size of the projection.')
-    parser.add_argument('--camera_along_X', type=bool, default=False,
+    parser.add_argument('--camera_along_X', action=argparse.BooleanOptionalAction, default=False,
                         help='Is the camera pointed along X (first voxel axis) ?')
     parser.add_argument('--gamma', type=float, default=2.0,
                         help='Gamma value.')
-    parser.add_argument('--flip_up_down', type=bool, default=False,
+    parser.add_argument('--flip_up_down', action=argparse.BooleanOptionalAction, default=False,
                         help='Flip up down?')
-    parser.add_argument('--display', type=bool, default=True,
+    parser.add_argument('--display', action=argparse.BooleanOptionalAction, default=True,
                         help='Display the output?')
-    parser.add_argument('--save', type=bool, default=True,
+    parser.add_argument('--save', action=argparse.BooleanOptionalAction, default=True,
                         help='Save the output?')
 
     args = parser.parse_args()
