@@ -28,7 +28,7 @@ The main file takes command line arguments to generate the projection parameter 
 
 Example usage from the terminal:
 ```
-./ihudeliver10_2d3d/main.py --volume_path "path/to/volume" --cuda_path "/usr/local/cuda/bin" --max_disp 150 --center x y z --roi_size x_size y_size z_size
+python ./ihudeliver10_2d3d/main.py --volume_path "path/to/volume" --cuda_path "/usr/local/cuda/bin" --max_disp 150 --center x y z --roi_size x_size y_size z_size
 ```
 
 ## Contributing
