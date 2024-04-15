@@ -14,8 +14,7 @@ The library used for DRR rendering is [DeepDRR](https://github.com/arcadelab/dee
 - [Installation](#installation)
 - [Usage](#usage)
 - [Contributing](#contributing)
-- [License](#license)
-- [Contact](#contact)
+- [Acknowledgements](#acknowledgements)
 
 ## Installation
 
