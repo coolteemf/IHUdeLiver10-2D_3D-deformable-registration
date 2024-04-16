@@ -136,7 +136,11 @@ def main(volume_path: str,
                        "img_roi": img_roi.tolist(),
                        "disp_roi": disp_roi_uncrop.tolist(),
                        "roi_2D": roi_2D.tolist(),
-                       "pixel_size_resize": psize_resize}, f,
+                       "pixel_size_resize": psize_resize,
+                       "intrinsic": cproj.intrinsic.data.tolist(),
+                       "extrinsic": cproj.extrinsic.data.tolist(),
+                       "world_from_anat": volume.world_from_anatomical.data.tolist()}, 
+                      f,
                       indent=0)
 
     print(f"img_roi: {img_roi}\nroi_2D: {roi_2D}\ndisp_roi: {disp_roi_uncrop}\n"
