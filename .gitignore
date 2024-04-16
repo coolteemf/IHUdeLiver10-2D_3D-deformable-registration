@@ -4,3 +4,4 @@ build/*
 *.egg-info/*
 *.lock
 dist/*
+launch.json
