@@ -322,7 +322,8 @@ def roi2D_from_roi3D(roi3D: list, camera_projection: CameraProjection, volume: V
     plane_points = make3DGrid((2,2,2), roi3D[:3], roi3D[3:], sparse=False).to(wijk).permute(1,2,3,0)
     p1p2 = torch.tensor([[(0,1,0), (1,0,0), (1,0,0)], [(0,0,1), (0,0,1), (0,1,0)]], dtype=la.dtype, device=la.device)
     planes_intersections = intersect_ray_plane_torch(la, lab, boxes, p1p2[0], p1p2[1]).squeeze()[..., :-1]
-    planes_intersections_idx = torch.where(~torch.isnan(planes_intersections).any(dim=-1))[0]
+    planes_intersections_idx = torch.where(torch.logical_and(~torch.isnan(planes_intersections).any(dim=-1),
+                                                            (planes_intersections.abs()<1e6).all(dim=-1)))[0]
     assert len(planes_intersections_idx) == 2, f"The camera principal ray must intersect the disp_roi 3D in 2 points, not {len(planes_intersections_idx)}"
     distances = torch.linalg.norm(planes_intersections[planes_intersections_idx] - camera_position, dim=-1)
     closest_plane_idx = planes_intersections_idx[distances.argmin()]
