@@ -30,7 +30,8 @@ def main(volume_path: str,
          gamma: float, 
          flip_up_down: bool,
          display: bool,
-         save: bool):
+         save: bool,
+         source_posterior: bool):
     ### CUDA path needs to be in path
     os.environ['PATH'] = f'{cuda_path}:' + os.environ['PATH']
     ### Check that the segmentation is aligned to volume
@@ -80,7 +81,7 @@ def main(volume_path: str,
                                  source_to_detector_distance=source_to_detector_distance,
                                  source_to_isocenter_distance=source_to_isocenter_distance,
                                  center=center_vox, flip_up_down=flip_up_down,
-                                 camera_along_X=camera_along_X)
+                                 camera_along_X=camera_along_X, source_posterior=source_posterior)
 
     p_original = project(cproj, volume, source_to_detector_distance, gamma=gamma)
     # Crop the volume to the visible part to speed up projection and reduce memory usage
@@ -186,6 +187,8 @@ if __name__ == "__main__":
                         help='Display the output?')
     parser.add_argument('--save', action=argparse.BooleanOptionalAction, default=True,
                         help='Save the output?')
+    parser.add_argument('--source_posterior', action=argparse.BooleanOptionalAction, default=False,
+                        help='Is the source on the posterior side?')
 
     args = parser.parse_args()
 
@@ -193,4 +196,5 @@ if __name__ == "__main__":
          args.roi_size, args.max_disp, args.center, args.name,
          args.source_to_detector_distance, args.source_to_isocenter_distance,
          args.detector_size, args.pixel_size, args.projection_size,
-         args.camera_along_X, args.gamma, args.flip_up_down, args.display, args.save)
+         args.camera_along_X, args.gamma, args.flip_up_down, args.display, args.save,
+         args.source_posterior)
