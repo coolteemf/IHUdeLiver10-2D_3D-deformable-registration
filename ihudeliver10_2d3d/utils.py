@@ -263,28 +263,31 @@ def roi3D_from_segmentation(segmentation: nib.Nifti1Image, volume: Volume, img_r
     mask = torch.as_tensor(segmentation.get_fdata()).numpy()
     mask_indices = compute_mask_indices(mask, segmentation.affine, volume.ijk_from_world.data)  # in IJK
     mask_roi = compute_mask_roi_from_indices(mask_indices)
+    print(f"Mask ROI: {mask_roi}")
     img_roi = np.concatenate((mask_roi[:3] - img_roi_margin_vox, mask_roi[3:] + img_roi_margin_vox))
     img_roi = np.round(img_roi).astype(int)
     img_roi = np.concatenate((np.clip(img_roi[:3], np.zeros((3,)), volume.shape),
                               np.clip(img_roi[3:], np.zeros((3,)), volume.shape))).astype(int)
+    print(f"img_roi: {img_roi}")
     center = (img_roi[3:] + img_roi[:3]) // 2
     return center, img_roi
 
 
-def disp_roi_from_img_roi(volume_shape, IJK_index, max_disp_vox, img_roi):
+def disp_roi_from_img_roi(volume_shape, IJK_index, max_disp_vox, img_roi, allow_disp_outside_roi=False):
     img_roi = np.asarray(img_roi)
     max_disp_vox = np.asarray(max_disp_vox)
     roi_size = img_roi[3:] - img_roi[:3]
-    if (max_disp_vox > roi_size // 2).any():
+    if not allow_disp_outside_roi and (max_disp_vox > roi_size // 2).any():
         max_disp_vox = np.minimum(max_disp_vox, roi_size // 4)
         print("Warning: max_disp_vox is too large, it has been reduced to 1/4 the size of the roi," 
-              "to prevent a null size disp_roi.")
+                "to prevent a null size disp_roi.")
     disp_roi = np.concatenate((img_roi[:3] + max_disp_vox, img_roi[3:] - max_disp_vox))
     disp_roi[IJK_index] = img_roi[IJK_index]
     disp_roi[IJK_index + 3] = img_roi[IJK_index + 3]
     disp_roi = np.round(disp_roi).astype(int)
     disp_roi = np.concatenate((np.clip(disp_roi[:3], np.zeros((3,)), volume_shape),
-                              np.clip(disp_roi[3:], np.zeros((3,)), volume_shape))).astype(int)                      
+                              np.clip(disp_roi[3:], np.zeros((3,)), volume_shape))).astype(int)   
+    print(f"disp_roi: {disp_roi}")                   
     return disp_roi
     
 

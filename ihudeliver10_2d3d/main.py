@@ -31,7 +31,8 @@ def main(volume_path: str,
          flip_up_down: bool,
          display: bool,
          save: bool,
-         source_posterior: bool):
+         source_posterior: bool,
+         allow_disp_outside_roi: bool):
     ### CUDA path needs to be in path
     os.environ['PATH'] = f'{cuda_path}:' + os.environ['PATH']
     ### Check that the segmentation is aligned to volume
@@ -75,7 +76,8 @@ def main(volume_path: str,
     disp_roi = disp_roi_from_img_roi(volume.shape, 
                                      IJK_index, 
                                      max_disp_vox, 
-                                     img_roi)
+                                     img_roi,
+                                     allow_disp_outside_roi)
 
     cproj = define_camera_matrix(volume=volume, image_size=projection_size, pixel_size=psize_resize,
                                  source_to_detector_distance=source_to_detector_distance,
@@ -189,7 +191,9 @@ if __name__ == "__main__":
                         help='Save the output?')
     parser.add_argument('--source_posterior', action=argparse.BooleanOptionalAction, default=False,
                         help='Is the source on the posterior side?')
-
+    parser.add_argument('--allow_disp_outside_roi', action=argparse.BooleanOptionalAction, 
+                        default=False,
+                        help='Allow displacements outside the roi (may lead to img_roi crop visible in the image)')
     args = parser.parse_args()
 
     main(args.volume_path, args.segmentation_path, args.cuda_path, args.seg_margin,
@@ -197,4 +201,5 @@ if __name__ == "__main__":
          args.source_to_detector_distance, args.source_to_isocenter_distance,
          args.detector_size, args.pixel_size, args.projection_size,
          args.camera_along_X, args.gamma, args.flip_up_down, args.display, args.save,
+         args.allow_disp_outside_roi,
          args.source_posterior)
