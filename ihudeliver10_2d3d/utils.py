@@ -550,9 +550,6 @@ def project_2d_points_vol(ijk_from_world, world_from_index, world_from_camera3d,
     world_from_camera3d = torch.as_tensor(np.array(world_from_camera3d)).to(torch.float64)
     # Must be used with float64 else error of up to 1 ijk unit
     origin, direction = get_torch_projection_ray(world_from_index, world_from_camera3d, p2d)
-    # Convert origin and direction from world to ijk
-    direction = torch.einsum('ab, ...b->...a', ijk_from_world, direction)
-    origin = torch.einsum('ab, ...b->...a', ijk_from_world, origin)
     if volume_shape is None and roi is None:
         raise ValueError("Either volume_shape or min_box and max_box must be specified.")
     if roi is not None:
