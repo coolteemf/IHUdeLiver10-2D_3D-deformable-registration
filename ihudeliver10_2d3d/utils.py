@@ -73,9 +73,12 @@ def load_volume_data(path: str):
         map_directions = {'left': -1, 'right':1, 'posterior': -1, 'anterior':1, 'inferior': -1, 'superior':1}
         volume_data = nrrd.read(path)
         directions = volume_data[1]['space'].split('-')
-        assert directions[0] == 'left' or directions[0] == 'right', "First dim must be left-right"
-        assert directions[1] == 'posterior' or directions[1] == 'anterior', "Second dim must be posterior-anterior"
-        assert directions[2] == 'inferior' or directions[2] == 'superior', "Third dim must be inferior-superior"
+        if directions[0] != 'left' or directions[0] != 'right':
+            raise ValueError("First dim must be left-right")
+        if directions[1] != 'posterior' or directions[1] != 'anterior':
+            raise ValueError("Second dim must be posterior-anterior")
+        if directions[2] != 'inferior' or directions[2] != 'superior':
+            raise ValueError("Third dim must be inferior-superior")
         directions = np.array([map_directions[direction] for direction in directions])
         affine = np.eye(4)
         affine[:3,:3] = volume_data[1]['space directions'] * directions
@@ -330,7 +333,8 @@ def roi2D_from_roi3D(roi3D: list, camera_projection: CameraProjection, world_fro
     planes_intersections = intersect_ray_plane_torch(la, lab, boxes, p1p2[0], p1p2[1]).squeeze()[..., :-1]
     planes_intersections_idx = torch.where(torch.logical_and(~torch.isnan(planes_intersections).any(dim=-1),
                                                             (planes_intersections.abs()<1e6).all(dim=-1)))[0]
-    assert len(planes_intersections_idx) == 2, f"The camera principal ray must intersect the disp_roi 3D in 2 points, not {len(planes_intersections_idx)}"
+    if len(planes_intersections_idx) != 2:
+        raise ValueError(f"The camera principal ray must intersect the disp_roi 3D in 2 points, not {len(planes_intersections_idx)}")
     distances = torch.linalg.norm(planes_intersections[planes_intersections_idx] - camera_position, dim=-1)
     closest_plane_idx = planes_intersections_idx[distances.argmin()]
     farthest_plane_idx = planes_intersections_idx[distances.argmax()]
@@ -469,7 +473,8 @@ def intersect_ray_plane_torch(la, lab, p0, p01, p02):
     p01xp02 = torch_to_vector(p01.cross(p02, dim=-1))
     lap0 = la.unsqueeze(1).expand((lab.shape[0],)+p0.shape) - p0.unsqueeze(0).expand((lab.shape[0],)+p0.shape)
     det = -torch.einsum('...b, cb->...c', lab, p01xp02)
-    assert not torch.allclose(det, torch.zeros_like(det))
+    if torch.allclose(det, torch.zeros_like(det)):
+        raise ValueError("Det of intersection should not be 0")
     t = (torch.einsum('...ac, ...c->...ac', torch.einsum('...ab, cb->...ac', lap0, p01xp02), 1. / det)).flatten(start_dim=1)
     return la.unsqueeze(1) + torch.einsum('...a, ...b->...ab', t, lab)
 
