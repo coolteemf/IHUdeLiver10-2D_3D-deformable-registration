@@ -47,6 +47,17 @@ def crop_roi(roi_to_crop: list, roi_to_crop_from: list, crop_max: bool = True, c
     return roi_cropped
 
 
+def check_point_in_bb(box: torch.Tensor, point):
+    if not tuple(box.shape) == (2,3):
+        raise ValueError
+    if not (box[1] > box[0]).all():
+        raise ValueError
+    box_size = box[1] - box[0]
+    d = point - box[0]
+    return torch.logical_and((d >= 0.).all(dim=-1),
+                             (d <= box_size).all(dim=-1))
+
+
 def project(camera_projection, volume, source_to_detector_distance, gamma=None, neglog=True, invert=True):
     with Projector(volume,
                    neglog=neglog,
