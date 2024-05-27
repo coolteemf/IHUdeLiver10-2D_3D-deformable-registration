@@ -302,9 +302,9 @@ def torch_to_point(x, dim=-1):
                                                   (...,)])), dim=dim)
 
 
-def roi2D_from_roi3D(roi3D: list, camera_projection: CameraProjection, volume: Volume, check_plot=False):
-    wijk = frame_tf_to_torch(volume.world_from_ijk).to(torch.float64)
-    ijkw = frame_tf_to_torch(volume.ijk_from_world).to(torch.float64)
+def roi2D_from_roi3D(roi3D: list, camera_projection: CameraProjection, world_from_ijk, ijk_from_world, check_plot=False):
+    wijk = torch.as_tensor(np.array(world_from_ijk)).to(torch.float64)
+    ijkw = torch.as_tensor(np.array(ijk_from_world)).to(torch.float64)
     world_from_index = frame_tf_to_torch(camera_projection.world_from_index).to(torch.float64)
     world_from_camera3d = frame_tf_to_torch(camera_projection.world_from_camera3d).to(torch.float64)
     ray_origin = geo_to_torch(camera_projection.intrinsic.optical_center).to(torch.float64)

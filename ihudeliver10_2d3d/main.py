@@ -94,7 +94,7 @@ def main(volume_path: str,
 
     # The roi_2D is defined as the biggest roi such that no points outside the disp_roi are in it
     # The camera projection is cropped to the roi_2D
-    roi_2D = roi2D_from_roi3D(disp_roi, cproj, volume)
+    roi_2D = roi2D_from_roi3D(disp_roi, cproj, volume.world_from_ijk, volume.ijk_from_world)
     img_crop = crop_from_roi_2D(roi_2D)
     p_crop = p_volume_crop_3D[img_crop[0]:img_crop[1], img_crop[2]:img_crop[3]]
     p_pad = np.zeros_like(p_volume_crop_3D)
