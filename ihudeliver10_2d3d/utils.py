@@ -55,7 +55,7 @@ def check_point_in_bb(box: torch.Tensor, point):
     box_size = box[1] - box[0]
     d = point - box[0]
     return torch.logical_and((d >= 0.).all(dim=-1),
-                             (d <= box_size).all(dim=-1))
+                             (d <= box_size).all(dim=-1)).sum(-1) == 2
 
 
 def project(camera_projection, volume, source_to_detector_distance, gamma=None, neglog=True, invert=True):
@@ -314,35 +314,44 @@ def torch_to_point(x, dim=-1):
         return torch.concat((x, torch.ones_like(x[(slice(None),)*dim +
                                                   (slice(x.shape[dim]-1, x.shape[dim], 1),) +
                                                   (...,)])), dim=dim)
+        
+
+def intersect_ray_box(origin, direction, ijk_from_world, roi3D):
+    """
+    Compute the intersections between a ray and a bounding box in 3D space.
+
+    Args:
+        origin (torch.Tensor): The origin of the ray in world coordinates.
+        direction (torch.Tensor): The direction of the ray in world coordinates.
+        ijk_from_world (np.ndarray): The transformation matrix from world to voxel coordinates.
+        world_from_ijk (np.ndarray): The transformation matrix from voxel to world coordinates.
+        roi3D (list): The bounding box coordinates in voxel (ijk) space.
+
+    Returns:
+        tuple: A tuple containing two torch.Tensor objects:
+            - planes_intersections (torch.Tensor): The intersection points between the ray and the bounding box.
+            - planes_intersections_mask (torch.Tensor): A mask indicating if the intersection points are inside the bounding box.
+    """
+    ijkw = torch.as_tensor(np.array(ijk_from_world)).to(torch.float64)
+    # Here origin, direction is converted from world to ijk
+    direction = torch.einsum('ab, ...b->...a', ijkw, direction)
+    origin = torch.einsum('ab, ...b->...a', ijkw, origin)
+    box = torch_to_point(torch.as_tensor(roi3D).to(ijkw).reshape(2,3), dim=-1)
+    p1p2 = torch.tensor([[(0,1,0), (1,0,0), (1,0,0)], [(0,0,1), (0,0,1), (0,1,0)]], dtype=origin.dtype, device=origin.device)
+    planes_intersections = intersect_ray_plane_torch(origin, direction, box, p1p2[0], p1p2[1]).squeeze()[..., :-1]
+    planes_intersections_mask = check_point_in_bb(box[...,:3], planes_intersections)
+    return planes_intersections, planes_intersections_mask
 
 
 def roi2D_from_roi3D(roi3D: list, camera_projection: CameraProjection, world_from_ijk, ijk_from_world, check_plot=False):
     wijk = torch.as_tensor(np.array(world_from_ijk)).to(torch.float64)
     ijkw = torch.as_tensor(np.array(ijk_from_world)).to(torch.float64)
-    world_from_index = frame_tf_to_torch(camera_projection.world_from_index).to(torch.float64)
-    world_from_camera3d = frame_tf_to_torch(camera_projection.world_from_camera3d).to(torch.float64)
+    world_from_index = torch.as_tensor(np.array(world_from_index)).to(torch.float64)
+    world_from_camera3d = torch.as_tensor(np.array(world_from_camera3d)).to(torch.float64)
     ray_origin = geo_to_torch(camera_projection.intrinsic.optical_center).to(torch.float64)
     camera_position = (ijkw @ torch.as_tensor(camera_projection.center_in_world.data).to(ijkw))[:-1]
-    
-    # Must be used with float64 else error of up to 1 ijk unit
-    la, lab = get_torch_projection_ray(world_from_index, world_from_camera3d, ray_origin)
-    # Here la, lab is converted from world to ijk
-    lab = torch.einsum('ab, ...b->...a', ijkw, lab)
-    la = torch.einsum('ab, ...b->...a', ijkw, la)
-    boxes = torch_to_point(torch.as_tensor(roi3D).to(wijk).reshape(2,3), dim=-1)
-    # 6 planes of the volume cube in IJK space are formed by the combinations of 3 base vectors and 2 points
-    # Order of the planes : JKmin, IKmin, IJmin, JKmax, IKmax, IJmax
-    plane_points_idx = torch.tensor([[(0,l[0],l[1]) for l in prod([0,1],[0,1])],
-                                     [(l[0],0,l[1]) for l in prod([0,1],[0,1])],
-                                     [(l[0],l[1],0) for l in prod([0,1],[0,1])],
-                                     [(1,l[0],l[1]) for l in prod([0,1],[0,1])],
-                                     [(l[0],1,l[1]) for l in prod([0,1],[0,1])],
-                                     [(l[0],l[1],1) for l in prod([0,1],[0,1])],
-                                    ])
-    plane_points = make3DGrid((2,2,2), roi3D[:3], roi3D[3:], sparse=False).to(wijk).permute(1,2,3,0)
-    p1p2 = torch.tensor([[(0,1,0), (1,0,0), (1,0,0)], [(0,0,1), (0,0,1), (0,1,0)]], dtype=la.dtype, device=la.device)
-    planes_intersections = intersect_ray_plane_torch(la, lab, boxes, p1p2[0], p1p2[1]).squeeze()[..., :-1]
-    planes_intersections_idx = torch.where(check_point_in_bb(boxes[...,:3], planes_intersections))[0]
+    planes_intersections, planes_intersections_mask = intersect_ray_box(ray_origin, ijk_from_world, world_from_ijk, roi3D)
+    planes_intersections_idx = torch.where(planes_intersections_mask)[0]
     if len(planes_intersections_idx) != 2:
         raise ValueError(f"The camera principal ray must intersect the disp_roi 3D in 2 points, not {len(planes_intersections_idx)}")
     distances = torch.linalg.norm(planes_intersections[planes_intersections_idx] - camera_position, dim=-1)
@@ -350,12 +359,21 @@ def roi2D_from_roi3D(roi3D: list, camera_projection: CameraProjection, world_fro
     farthest_plane_idx = planes_intersections_idx[distances.argmax()]
     # To get the biggest 2D roi while keeping all points of the 2D roi inside the 3D roi, 
     # select the corners of the farthest plane, make rays to the camera origin, intersect the rays with the closest plane and project in 2D
+    plane_points_idx = torch.tensor([[(0,l[0],l[1]) for l in prod([0,1],[0,1])],
+                                    [(l[0],0,l[1]) for l in prod([0,1],[0,1])],
+                                    [(l[0],l[1],0) for l in prod([0,1],[0,1])],
+                                    [(1,l[0],l[1]) for l in prod([0,1],[0,1])],
+                                    [(l[0],1,l[1]) for l in prod([0,1],[0,1])],
+                                    [(l[0],l[1],1) for l in prod([0,1],[0,1])],
+                                ])
+    plane_points = make3DGrid((2,2,2), roi3D[:3], roi3D[3:], sparse=False).to(wijk).permute(1,2,3,0)
     farthest_points_idx = plane_points_idx[farthest_plane_idx]
     farthest_points = plane_points[farthest_points_idx[:,0],
                                    farthest_points_idx[:,1],
                                    farthest_points_idx[:,2]]
     rays = farthest_points - camera_position
-    closest_points = intersect_ray_plane_torch(la, torch_to_vector(rays, dim=-1), boxes, p1p2[0], p1p2[1])[:,closest_plane_idx]
+    rays_intersections, _ = intersect_ray_box(ijk_from_world, world_from_ijk, camera_position, rays, roi3D)
+    closest_points = rays_intersections[:,closest_plane_idx]
     
     if check_plot:
         fig, ax = make_3D_plot()
@@ -479,25 +497,25 @@ def make3DGrid(shape, mins=None, maxs=None, dtype=torch.float32, device=None, sp
     return torch.stack(torch.meshgrid(xd, yd, zd, indexing=indexing))
 
 
-def intersect_ray_plane_torch(la, lab, p0, p01, p02):
+def intersect_ray_plane_torch(origin, direction, p0, p01, p02):
     p01xp02 = torch_to_vector(p01.cross(p02, dim=-1))
-    lap0 = la.unsqueeze(1).expand((lab.shape[0],)+p0.shape) - p0.unsqueeze(0).expand((lab.shape[0],)+p0.shape)
-    det = -torch.einsum('...b, cb->...c', lab, p01xp02)
+    lap0 = origin.unsqueeze(1).expand((direction.shape[0],)+p0.shape) - p0.unsqueeze(0).expand((direction.shape[0],)+p0.shape)
+    det = -torch.einsum('...b, cb->...c', direction, p01xp02)
     if torch.allclose(det, torch.zeros_like(det)):
         raise ValueError("Det of intersection should not be 0")
     t = (torch.einsum('...ac, ...c->...ac', torch.einsum('...ab, cb->...ac', lap0, p01xp02), 1. / det)).flatten(start_dim=1)
-    return la.unsqueeze(1) + torch.einsum('...a, ...b->...ab', t, lab)
+    return origin.unsqueeze(1) + torch.einsum('...a, ...b->...ab', t, direction)
 
 
-def get_torch_projection_ray(world_from_index, world_from_camera3d, ray_origin):
-    ray_origin = ray_origin.unsqueeze(0) if len(ray_origin.shape) < 2 else ray_origin
-    lab = torch.einsum('ab, ...b->...a', world_from_index, ray_origin)
-    # la is the origin point of all rays, ie get_center_in_world
-    la = torch.einsum('ab, ...b->...a', world_from_camera3d,
-                      torch_to_point(torch.zeros((3,), dtype=lab.dtype, device=lab.device)))
-    la = la[..., :-1] / la[..., -1].unsqueeze(-1)
-    la = torch_to_point(la).unsqueeze(0)
-    return la, lab
+def get_torch_projection_ray(world_from_index, world_from_camera3d, center_point):
+    center_point = center_point.unsqueeze(0) if len(center_point.shape) < 2 else center_point
+    direction = torch.einsum('ab, ...b->...a', world_from_index, center_point)
+    # origin is the origin point of all rays, ie get_center_in_world
+    origin = torch.einsum('ab, ...b->...a', world_from_camera3d,
+                      torch_to_point(torch.zeros((3,), dtype=direction.dtype, device=direction.device)))
+    origin = origin[..., :-1] / origin[..., -1].unsqueeze(-1)
+    origin = torch_to_point(origin).unsqueeze(0)
+    return origin, direction
 
 
 def filter_degenerate_elements(x, filter_value):
@@ -509,34 +527,48 @@ def filter_degenerate_elements(x, filter_value):
     return degenerate_elements, degenerate_indices
 
 
-def intersect_ray_box_torch(ijk_from_world, volume_shape,
-                            world_from_index, world_from_camera3d, ray_origin,
-                            min_box=None, max_box=None, filter_degenerate=True):
+def project_2d_points_vol(ijk_from_world, world_from_index, world_from_camera3d, p2d,
+                          roi=None, volume_shape=None, filter_degenerate=True):
+    """
+    Compute the intersection points between a ray and a box in torch tensors.
+
+    Args:
+        ijk_from_world (torch.Tensor): Transformation matrix from world to IJK space.
+        volume_shape (tuple): Shape of the volume in IJK space.
+        world_from_index (torch.Tensor): Transformation matrix from index to world space.
+        world_from_camera3d (torch.Tensor): Transformation matrix from camera3d to world space.
+        p2d (torch.Tensor): Origin of the ray in 2D space.
+        min_box (torch.Tensor, optional): Minimum coordinates of the box in IJK space. Defaults to None.
+        max_box (torch.Tensor, optional): Maximum coordinates of the box in IJK space. Defaults to None.
+        filter_degenerate (bool, optional): Whether to filter out degenerate rays. Defaults to True.
+
+    Returns:
+        dict: A dictionary containing the intersection points, intersection ray indices, and the rays.
+    """
+    ijk_from_world = torch.as_tensor(np.array(ijk_from_world)).to(torch.float64)
+    world_from_index = torch.as_tensor(np.array(world_from_index)).to(torch.float64)
+    world_from_camera3d = torch.as_tensor(np.array(world_from_camera3d)).to(torch.float64)
     # Must be used with float64 else error of up to 1 ijk unit
-    la, lab = get_torch_projection_ray(world_from_index, world_from_camera3d, ray_origin)
-    # Here la, lab is converted from world to ijk
-    lab = torch.einsum('ab, ...b->...a', ijk_from_world, lab)
-    la = torch.einsum('ab, ...b->...a', ijk_from_world, la)
-    min_box = min_box if min_box is not None else torch_to_point(torch.zeros(len(volume_shape), dtype=la.dtype, device=la.device))
-    max_box = max_box if max_box is not None else torch_to_point(torch.tensor([v-1. for v in volume_shape], dtype=la.dtype, device=la.device))
-    boxes = torch.stack((min_box, max_box))
-    # 6 planes of the volume cube in IJK space are formed by the combinations of 3 base vectors and 2 points
-    p1p2 = torch.tensor([[(0,1,0), (1,0,0), (1,0,0)], [(0,0,1), (0,0,1), (0,1,0)]], dtype=la.dtype, device=la.device)
-    planes_intersections = intersect_ray_plane_torch(la, lab, boxes, p1p2[0], p1p2[1])
-    # Checking which intersections points lie in the volume
-    indices_intersections_in_box = torch.where(torch.logical_and(torch.less_equal(planes_intersections, max_box+1e-2).sum(-1) == planes_intersections.shape[-1],
-                                                                 torch.greater_equal(planes_intersections, min_box - 1e-2).sum(-1) == planes_intersections.shape[-1]))
-    intersection_ray_index = indices_intersections_in_box[0] #IDs of the rays that produced the intersections points
-    box_intersections = planes_intersections[indices_intersections_in_box]
-    box_intersections = box_intersections[..., :-1]
+    origin, direction = get_torch_projection_ray(world_from_index, world_from_camera3d, p2d)
+    # Convert origin and direction from world to ijk
+    direction = torch.einsum('ab, ...b->...a', ijk_from_world, direction)
+    origin = torch.einsum('ab, ...b->...a', ijk_from_world, origin)
+    if volume_shape is None and roi is None:
+        raise ValueError("Either volume_shape or min_box and max_box must be specified.")
+    if roi is not None:
+        box = torch.stack((torch.as_tensor(roi[:3], dtype=torch.float64), torch.as_tensor(roi[3:], dtype=torch.float64) - 1))
+    else:
+        box = torch.stack((torch.zeros(3, dtype=torch.float64), torch.tensor(volume_shape, dtype=torch.float64) - 1))
+    intersections, intersections_mask = intersect_ray_box(origin, direction, ijk_from_world, box)
+    intersection_ray_index = torch.where(intersections_mask)[0]
     if filter_degenerate:
         # Checking that each ray has only 2 intersections
         degenerate_ray_index, degenerate_ray_index_index = filter_degenerate_elements(intersection_ray_index, 2)
         if len(degenerate_ray_index) != 0:
             for indexes in degenerate_ray_index:
                 intersection_ray_index = torch_pop(intersection_ray_index, indexes)
-                box_intersections = torch_pop(box_intersections, indexes)
-    return {'intersections': box_intersections, 'intersection_ray_index':intersection_ray_index, 'rays':(la,lab)}
+                intersections = torch_pop(intersections, indexes)
+    return {'intersections': intersections, 'intersections_mask': intersections_mask, 'intersection_ray_index':intersection_ray_index, 'rays':(origin,direction)}
 
 
 def plot_img(projection,
@@ -582,11 +614,11 @@ def Visualize(volume, camera_projection, disp_roi, disp_roi_2D):
                                 np.linspace(disp_roi_2D[0], disp_roi_2D[2]-1, 2),
                                 np.linspace(disp_roi_2D[1], disp_roi_2D[3]-1, 2),
                                 indexing='ij')).reshape(2, -1).T, dtype=torch.float64), dim=-1)
-    p3d_corners = intersect_ray_box_torch(geo_to_torch(volume.ijk_from_world).to(torch.float64), 
-                                          volume.shape,
+    p3d_corners = project_2d_points_vol(geo_to_torch(volume.ijk_from_world).to(torch.float64), 
                                           geo_to_torch(camera_projection.world_from_index).to(torch.float64), 
                                           geo_to_torch(camera_projection.world_from_camera3d).to(torch.float64),
                                           p2d_corners,
+                                          volume.shape,
                                         #   min_box=torch_to_point(torch.tensor(disp_roi[:3], dtype=torch.float64)),
                                         #   max_box=torch_to_point(torch.tensor(disp_roi[3:], dtype=torch.float64))
                                                                )['intersections'].numpy()
