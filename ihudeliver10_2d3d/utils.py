@@ -55,7 +55,7 @@ def check_point_in_bb(box: torch.Tensor, point, eps=1e-6):
     box_size = box[1] - box[0]
     d = point - box[0]
     return torch.logical_and((d >= 0. - eps).all(dim=-1),
-                             (d <= box_size + eps).all(dim=-1)).sum(-1) == 2
+                             (d <= box_size + eps).all(dim=-1))
 
 
 def project(camera_projection, volume, source_to_detector_distance, gamma=None, neglog=True, invert=True):
@@ -351,7 +351,7 @@ def roi2D_from_roi3D(roi3D: list, camera_projection: CameraProjection, world_fro
     ray_origin = geo_to_torch(camera_projection.intrinsic.optical_center).to(torch.float64)
     camera_position = (ijkw @ torch.as_tensor(camera_projection.center_in_world.data).to(ijkw))[:-1]
     planes_intersections, planes_intersections_mask = intersect_ray_box(ray_origin, ijk_from_world, world_from_ijk, roi3D)
-    planes_intersections_idx = torch.where(planes_intersections_mask)[0]
+    planes_intersections_idx = torch.where(planes_intersections_mask.sum(-1) == 2)[0]
     if len(planes_intersections_idx) != 2:
         raise ValueError(f"The camera principal ray must intersect the disp_roi 3D in 2 points, not {len(planes_intersections_idx)}")
     distances = torch.linalg.norm(planes_intersections[planes_intersections_idx] - camera_position, dim=-1)
@@ -557,7 +557,7 @@ def project_2d_points_vol(ijk_from_world, world_from_index, world_from_camera3d,
     else:
         box = torch.stack((torch.zeros(3, dtype=torch.float64), torch.tensor(volume_shape, dtype=torch.float64) - 1))
     intersections, intersections_mask = intersect_ray_box(origin, direction, ijk_from_world, box)
-    intersection_ray_index = torch.where(intersections_mask)[0]
+    intersection_ray_index = torch.where(intersections_mask.sum(-1) == 2)[0]
     if filter_degenerate:
         # Checking that each ray has only 2 intersections
         degenerate_ray_index, degenerate_ray_index_index = filter_degenerate_elements(intersection_ray_index, 2)
