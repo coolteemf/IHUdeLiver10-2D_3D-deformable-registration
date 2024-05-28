@@ -528,16 +528,16 @@ def filter_degenerate_elements(x, filter_value):
 
 
 def project_2d_points_vol(ijk_from_world, world_from_index, world_from_camera3d, p2d,
-                          roi=None, volume_shape=None, filter_degenerate=True):
+                          roi=None, volume_shape=None, filter_degenerate=True, device=None):
     """
     Compute the intersection points between a ray and a box in torch tensors.
 
     Args:
-        ijk_from_world (torch.Tensor): Transformation matrix from world to IJK space.
+        ijk_from_world: Transformation matrix from world to IJK space.
         volume_shape (tuple): Shape of the volume in IJK space.
-        world_from_index (torch.Tensor): Transformation matrix from index to world space.
-        world_from_camera3d (torch.Tensor): Transformation matrix from camera3d to world space.
-        p2d (torch.Tensor): Origin of the ray in 2D space.
+        world_from_index: Transformation matrix from index to world space.
+        world_from_camera3d: Transformation matrix from camera3d to world space.
+        p2d: Origin of the ray in 2D space.
         min_box (torch.Tensor, optional): Minimum coordinates of the box in IJK space. Defaults to None.
         max_box (torch.Tensor, optional): Maximum coordinates of the box in IJK space. Defaults to None.
         filter_degenerate (bool, optional): Whether to filter out degenerate rays. Defaults to True.
@@ -545,9 +545,17 @@ def project_2d_points_vol(ijk_from_world, world_from_index, world_from_camera3d,
     Returns:
         dict: A dictionary containing the intersection points, intersection ray indices, and the rays.
     """
-    ijk_from_world = torch.as_tensor(np.array(ijk_from_world)).to(torch.float64)
-    world_from_index = torch.as_tensor(np.array(world_from_index)).to(torch.float64)
-    world_from_camera3d = torch.as_tensor(np.array(world_from_camera3d)).to(torch.float64)
+    if not isinstance(p2d, torch.Tensor):
+        p2d = torch.as_tensor(np.array(p2d), device=device)
+    if not isinstance(ijk_from_world, torch.Tensor):
+        ijk_from_world = torch.as_tensor(np.array(ijk_from_world), device=device)
+    if not isinstance(world_from_index, torch.Tensor):
+        world_from_index = torch.as_tensor(np.array(world_from_index), device=device)
+    if not isinstance(world_from_camera3d, torch.Tensor):
+        world_from_camera3d = torch.as_tensor(np.array(world_from_camera3d), device=device)
+    ijk_from_world = ijk_from_world.to(torch.float64)
+    world_from_index = world_from_index.to(torch.float64)
+    world_from_camera3d = world_from_camera3d.to(torch.float64)
     # Must be used with float64 else error of up to 1 ijk unit
     origin, direction = get_torch_projection_ray(world_from_index, world_from_camera3d, p2d)
     if volume_shape is None and roi is None:
