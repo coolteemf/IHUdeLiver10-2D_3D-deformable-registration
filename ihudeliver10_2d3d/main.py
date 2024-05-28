@@ -73,6 +73,7 @@ def main(volume_path: str,
         center_vox, img_roi = roi3D_from_center(roi_size, center, volume)
         
     center = np.array(volume.world_from_ijk @ geo.point(center_vox))
+    #TODO change this so that disp roi stops at the edge of the issue for the posterior plane, to avoid deforming the CT table
     disp_roi = disp_roi_from_img_roi(volume.shape, 
                                      IJK_index, 
                                      max_disp_vox, 
