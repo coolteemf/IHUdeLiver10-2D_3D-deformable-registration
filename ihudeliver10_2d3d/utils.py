@@ -9,8 +9,8 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from deepdrr import Volume, geo, Projector
-from deepdrr.geo import CameraProjection, CameraIntrinsicTransform, FrameTransform
+from killeengeo import CameraProjection, CameraIntrinsicTransform, FrameTransform
+import killeengeo as geo
 
 geoR = geo.FrameTransform.from_rotation
 geoT = geo.FrameTransform.from_translation
@@ -59,16 +59,20 @@ def check_point_in_bb(box: torch.Tensor, point, eps=1e-6):
 
 
 def project(camera_projection, volume, source_to_detector_distance, gamma=None, neglog=True, invert=True):
-    with Projector(volume,
-                   neglog=neglog,
-                   camera_intrinsics=camera_projection.intrinsic,
-                   source_to_detector_distance=source_to_detector_distance) as projector:
-        projected = projector(camera_projection)
-        if invert:
-            projected = 1 - projected
-        if gamma is not None:
-            projected = projected ** (1 / gamma)
-    return projected
+    try:
+        from deepdrr import Projector
+        with Projector(volume,
+                    neglog=neglog,
+                    camera_intrinsics=camera_projection.intrinsic,
+                    source_to_detector_distance=source_to_detector_distance) as projector:
+            projected = projector(camera_projection)
+            if invert:
+                projected = 1 - projected
+            if gamma is not None:
+                projected = projected ** (1 / gamma)
+        return projected
+    except ImportError:
+        return None
 
 
 def load_volume_data(path: str):
@@ -143,7 +147,7 @@ def R_from_IJK_to_C3D(volume, camera_normal, camera_intrinsic):
 
 
 
-def apply_volume_rotation_to_camera_proj(camera_projection: CameraProjection, volume:Volume, rotation: np.ndarray,
+def apply_volume_rotation_to_camera_proj(camera_projection: CameraProjection, volume, rotation: np.ndarray,
                                          center: np.ndarray = None):
     """Applies a rotation to the camera projection, such that the camera is rotated around the volume center.
     This is equivalent to rotating the volume itself.
@@ -162,7 +166,7 @@ def apply_volume_rotation_to_camera_proj(camera_projection: CameraProjection, vo
     return new_camera_projection
 
 
-def define_camera_matrix(volume: Volume, image_size: tuple, pixel_size: tuple, source_to_detector_distance: float,
+def define_camera_matrix(volume, image_size: tuple, pixel_size: tuple, source_to_detector_distance: float,
                          source_to_isocenter_distance: float, center: np.ndarray, flip_up_down: bool=False,
                          camera_along_X: bool=False, source_posterior: bool=False):
     """Define camera position and orientation.
@@ -272,7 +276,7 @@ def roi3D_from_center(roi_size, center, volume):
     return center_vox,img_roi
 
 
-def roi3D_from_segmentation(segmentation: nib.Nifti1Image, volume: Volume, img_roi_margin_vox: tuple, max_disp_vox: tuple, IJK_index: int):
+def roi3D_from_segmentation(segmentation: nib.Nifti1Image, volume, img_roi_margin_vox: tuple, max_disp_vox: tuple, IJK_index: int):
     img_roi_margin_vox = np.asarray(img_roi_margin_vox)
     mask = torch.as_tensor(segmentation.get_fdata()).numpy()
     mask_indices = compute_mask_indices(mask, segmentation.affine, volume.ijk_from_world.data)  # in IJK
@@ -444,7 +448,7 @@ class Crop:
                 return img.slicer[(...,) + tuple(self.slice)]
 
 
-def crop_ddrr_volume(volume: Volume, hu_volume: np.ndarray, roi: Union[tuple, np.ndarray, list, torch.Tensor]):
+def crop_ddrr_volume(volume, hu_volume: np.ndarray, roi: Union[tuple, np.ndarray, list, torch.Tensor]):
     # Cropping the volume requires to adjust the coordinate matrices through anatomical_from_ijk
     anatomical_from_ijk = frame_tf_to_torch(volume.anatomical_from_ijk)
     anatomical_from_ijk = world_from_ijk_in_roi(anatomical_from_ijk, roi)

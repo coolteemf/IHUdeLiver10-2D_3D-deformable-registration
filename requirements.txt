@@ -1,7 +1,4 @@
 numpy
-cupy-cuda12x
-cuda-python
-deepdrr
 nibabel
 scikit-image
 matplotlib

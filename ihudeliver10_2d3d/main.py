@@ -5,13 +5,12 @@ from copy import deepcopy
 
 import numpy as np
 import nibabel as nib
-from deepdrr import Volume, geo
 from skimage import io
 import matplotlib.pyplot as plt
 from utils import Visualize, check_disp_roi_invisible, disp_roi_from_img_roi, roi2D_from_roi3D, roi3D_from_center, roi3D_from_segmentation, \
                   load_volume_data, define_camera_matrix, project, crop_ddrr_volume, \
                   crop_roi, crop_from_roi_2D, plot_img
-
+import killeengeo as geo
 
 def main(volume_path: str, 
          segmentation_path: str, 

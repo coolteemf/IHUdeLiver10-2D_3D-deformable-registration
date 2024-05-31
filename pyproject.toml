@@ -11,15 +11,21 @@ packages = [{include = "ihudeliver10_2d3d"}]
 python = "^3.10"
 numpy = "^1.23.5"
 nibabel = "^5.2.1"
-cupy-cuda12x = "^13.0.0"
-cuda-python = "^12.3.0"
-killeengeo = { git = "https://github.com/coolteemf/killeengeo.git", branch = "geom_xflow" }
-deepdrr = { git = "https://github.com/coolteemf/deepdrr.git" }
 scikit-image = "^0.19.3"
 matplotlib = "^3.8.3"
 pynrrd = "^1.0.0"
 scipy = "^1.12.0"
 torch = "^2.2.1"
+killeengeo = {git = "https://github.com/coolteemf/killeengeo.git", branch = "geom_xflow"}
+
+[tool.poetry.group.cuda]
+optional = true
+
+[tool.poetry.group.cuda.dependencies]
+cupy-cuda12x = "^13.0.0"
+cuda-python = "^12.3.0"
+killeengeo = { git = "https://github.com/coolteemf/killeengeo.git", branch = "geom_xflow" }
+deepdrr = { git = "https://github.com/coolteemf/deepdrr.git" }
 
 [build-system]
 requires = ["poetry-core"]
