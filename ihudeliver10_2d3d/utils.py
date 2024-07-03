@@ -346,9 +346,13 @@ def intersect_ray_box(origin, direction, ijk_from_world, roi3D):
 def roi2D_from_roi3D(roi3D: list, camera_projection: CameraProjection, world_from_ijk, ijk_from_world, check_plot=False):
     wijk = torch.as_tensor(np.array(world_from_ijk)).to(torch.float64)
     ijkw = torch.as_tensor(np.array(ijk_from_world)).to(torch.float64)
+    world_from_index = frame_tf_to_torch(camera_projection.world_from_index).to(torch.float64)
+    world_from_camera3d = frame_tf_to_torch(camera_projection.world_from_camera3d).to(torch.float64)
     ray_origin = geo_to_torch(camera_projection.intrinsic.optical_center).to(torch.float64)
+    # Must be used with float64 else error of up to 1 ijk unit
+    ray_origin, direction = get_torch_projection_ray(world_from_index, world_from_camera3d, ray_origin)
     camera_position = (ijkw @ torch.as_tensor(camera_projection.center_in_world.data).to(ijkw))[:-1]
-    planes_intersections, planes_intersections_mask = intersect_ray_box(ray_origin, ijk_from_world, world_from_ijk, roi3D)
+    planes_intersections, planes_intersections_mask = intersect_ray_box(ray_origin, direction, ijk_from_world, roi3D)
     planes_intersections_idx = torch.where(planes_intersections_mask.sum(-1) == 2)[0]
     if len(planes_intersections_idx) != 2:
         raise ValueError(f"The camera principal ray must intersect the disp_roi 3D in 2 points, not {len(planes_intersections_idx)}")
