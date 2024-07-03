@@ -346,8 +346,6 @@ def intersect_ray_box(origin, direction, ijk_from_world, roi3D):
 def roi2D_from_roi3D(roi3D: list, camera_projection: CameraProjection, world_from_ijk, ijk_from_world, check_plot=False):
     wijk = torch.as_tensor(np.array(world_from_ijk)).to(torch.float64)
     ijkw = torch.as_tensor(np.array(ijk_from_world)).to(torch.float64)
-    world_from_index = torch.as_tensor(np.array(world_from_index)).to(torch.float64)
-    world_from_camera3d = torch.as_tensor(np.array(world_from_camera3d)).to(torch.float64)
     ray_origin = geo_to_torch(camera_projection.intrinsic.optical_center).to(torch.float64)
     camera_position = (ijkw @ torch.as_tensor(camera_projection.center_in_world.data).to(ijkw))[:-1]
     planes_intersections, planes_intersections_mask = intersect_ray_box(ray_origin, ijk_from_world, world_from_ijk, roi3D)
