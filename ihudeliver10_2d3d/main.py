@@ -79,12 +79,14 @@ def main(volume_path: str,
                                      max_disp_vox, 
                                      img_roi,
                                      allow_disp_outside_roi)
+    print(f"disp_roi: {disp_roi}")                   
+    print(f"img_roi: {img_roi}")
 
     cproj = define_camera_matrix(volume=volume, image_size=projection_size, pixel_size=psize_resize,
                                  source_to_detector_distance=source_to_detector_distance,
                                  source_to_isocenter_distance=source_to_isocenter_distance,
-                                 center=center_vox, flip_up_down=flip_up_down,
-                                 camera_along_X=camera_along_X, source_posterior=source_posterior)
+                                 center=center_vox, IJK_index=IJK_index, flip_up_down=flip_up_down,
+                                 source_posterior=source_posterior)
 
     p_original = project(cproj, volume, source_to_detector_distance, gamma=gamma)
     # Crop the volume to the visible part to speed up projection and reduce memory usage
@@ -170,13 +172,13 @@ if __name__ == "__main__":
                         help='Distance between the bounds of the organ segmentation and the bounds of the roi.')
     parser.add_argument('--name', type=str, default=None,
                         help='Name of the output.')
-    parser.add_argument('--source_to_detector_distance', type=float, default=1500,
+    parser.add_argument('--source_to_detector_distance', type=float, default=1100,
                         help='The distance between the X-ray source and the detector.')
     parser.add_argument('--source_to_isocenter_distance', type=float, default=1050,
                         help='The distance from the source to the isocenter.')
-    parser.add_argument('--detector_size', nargs='+', type=int, default=(2330, 2330),
+    parser.add_argument('--detector_size', nargs='+', type=int, default=(768, 768),
                         help='Size of the detector.')
-    parser.add_argument('--pixel_size', nargs='+', type=float, default=(0.148, 0.148),
+    parser.add_argument('--pixel_size', nargs='+', type=float, default=(0.388, 0.388),
                         help='Size of the pixel.')
     parser.add_argument('--projection_size', nargs='+', type=int, default=(512, 512),
                         help='Size of the projection.')

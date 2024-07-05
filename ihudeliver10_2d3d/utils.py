@@ -164,7 +164,7 @@ def apply_volume_rotation_to_camera_proj(camera_projection: CameraProjection, vo
 
 def define_camera_matrix(volume: Volume, image_size: tuple, pixel_size: tuple, source_to_detector_distance: float,
                          source_to_isocenter_distance: float, center: np.ndarray, IJK_index: int,
-                         flip_up_down: bool=False, camera_along_X: bool=False, source_posterior: bool=False):
+                         flip_up_down: bool=False, source_posterior: bool=False):
     """Define camera position and orientation.
     camera_along_X: if False, camera will be oriented along the J axis of the volume in IJK space, else along the I axis.
     """
@@ -304,7 +304,6 @@ def disp_roi_from_img_roi(volume_shape, IJK_index, max_disp_vox, img_roi, allow_
     disp_roi = np.round(disp_roi).astype(int)
     disp_roi = np.concatenate((np.clip(disp_roi[:3], np.zeros((3,)), volume_shape),
                               np.clip(disp_roi[3:], np.zeros((3,)), volume_shape))).astype(int)   
-    print(f"disp_roi: {disp_roi}")                   
     return disp_roi
     
 
