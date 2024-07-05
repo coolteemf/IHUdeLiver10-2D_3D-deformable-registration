@@ -163,8 +163,8 @@ def apply_volume_rotation_to_camera_proj(camera_projection: CameraProjection, vo
 
 
 def define_camera_matrix(volume: Volume, image_size: tuple, pixel_size: tuple, source_to_detector_distance: float,
-                         source_to_isocenter_distance: float, center: np.ndarray, flip_up_down: bool=False,
-                         camera_along_X: bool=False, source_posterior: bool=False):
+                         source_to_isocenter_distance: float, center: np.ndarray, IJK_index: int,
+                         flip_up_down: bool=False, camera_along_X: bool=False, source_posterior: bool=False):
     """Define camera position and orientation.
     camera_along_X: if False, camera will be oriented along the J axis of the volume in IJK space, else along the I axis.
     """
@@ -184,8 +184,11 @@ def define_camera_matrix(volume: Volume, image_size: tuple, pixel_size: tuple, s
     if source_posterior:
         cproj = apply_volume_rotation_to_camera_proj(cproj, volume, np.array([0, 0, np.pi]), 
                                                      center = volume.world_from_ijk @ geo.point(center))
-    if camera_along_X:
+    if IJK_index == 0:
         cproj = apply_volume_rotation_to_camera_proj(cproj, volume, np.array([0, 0, -np.pi * 90 / 180]),
+                                                     center = volume.world_from_ijk @ geo.point(center))
+    if IJK_index == 2:
+        cproj = apply_volume_rotation_to_camera_proj(cproj, volume, np.array([np.pi * 90 / 180, 0, 0]),
                                                      center = volume.world_from_ijk @ geo.point(center))
     #
     #
