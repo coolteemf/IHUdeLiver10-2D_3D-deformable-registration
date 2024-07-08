@@ -95,13 +95,6 @@ def main(volume_path: str,
     disp_roi = crop_roi(disp_roi, img_roi)
     p_volume_crop_3D = project(cproj, volume, source_to_detector_distance, gamma=gamma)
 
-    # The roi_2D is defined as the biggest roi such that no points outside the disp_roi are in it
-    # The camera projection is cropped to the roi_2D
-    roi_2D = roi2D_from_roi3D(disp_roi, cproj, volume.world_from_ijk, volume.ijk_from_world)
-    img_crop = crop_from_roi_2D(roi_2D)
-    p_crop = p_volume_crop_3D[img_crop[0]:img_crop[1], img_crop[2]:img_crop[3]]
-    p_pad = np.zeros_like(p_volume_crop_3D)
-    p_pad[img_crop[0]:img_crop[1], img_crop[2]:img_crop[3]] = p_crop
     # If files already exist, increment the index
     it = 0
     while os.path.exists(os.path.join(save_path, f"{name}_intrinsic_{it}.npy")):
@@ -110,9 +103,7 @@ def main(volume_path: str,
     if display:
         plot_img(p_original, title=f"original projection")
         plot_img(p_volume_crop_3D, title="projection volume cropped")
-        plot_img(p_crop, title="projection 2D cropped")
-        plot_img(p_pad, title="projection 2D cropped padded")
-        Visualize(volume, cproj, disp_roi, roi_2D)
+        Visualize(volume, cproj, disp_roi, [0,0,projection_size[0],projection_size[1]])
         # check_disp_roi_invisible(volume, disp_roi, cproj, source_to_detector_distance, gamma, img_crop, p_volume_crop_3D)
         plt.show()
 
@@ -122,8 +113,6 @@ def main(volume_path: str,
         np.save(os.path.join(save_path, f"{name}_worldfromanat_{it}.npy"), volume.world_from_anatomical.data)
         io.imsave(os.path.join(save_path, f"{name}_poriginal_{it}.png"),
                   np.round(p_original * 255).astype(np.uint8))
-        io.imsave(os.path.join(save_path, f"{name}_pimgcrop_{it}.png"),
-                  np.round(p_pad * 255).astype(np.uint8))
         io.imsave(os.path.join(save_path, f"{name}_pvolumecrop_{it}.png"),
                   np.round(p_volume_crop_3D * 255).astype(np.uint8))
         with open(os.path.join(save_path, f"{name}_projection_parameters_{it}.json"), 'w') as f:
@@ -141,7 +130,6 @@ def main(volume_path: str,
                        "volume_name": volume_name,
                        "img_roi": img_roi.tolist(),
                        "disp_roi": disp_roi_uncrop.tolist(),
-                       "roi_2D": roi_2D.tolist(),
                        "pixel_size_resize": psize_resize,
                        "intrinsic": cproj.intrinsic.data.tolist(),
                        "extrinsic": cproj.extrinsic.data.tolist(),
@@ -149,7 +137,7 @@ def main(volume_path: str,
                       f,
                       indent=0)
 
-    print(f"img_roi: {img_roi}\nroi_2D: {roi_2D}\ndisp_roi: {disp_roi_uncrop}\n"
+    print(f"img_roi: {img_roi}\ndisp_roi: {disp_roi_uncrop}\n"
           f"pixel_size: {psize_resize}\n"
           f"iteration {it}")
 

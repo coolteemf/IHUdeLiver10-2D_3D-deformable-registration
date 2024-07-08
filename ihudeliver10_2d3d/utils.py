@@ -345,62 +345,6 @@ def intersect_ray_box(origin, direction, ijk_from_world, roi3D):
     return planes_intersections, planes_intersections_mask
 
 
-def roi2D_from_roi3D(roi3D: list, camera_projection: CameraProjection, world_from_ijk, ijk_from_world, check_plot=False):
-    wijk = torch.as_tensor(np.array(world_from_ijk)).to(torch.float64)
-    ijkw = torch.as_tensor(np.array(ijk_from_world)).to(torch.float64)
-    world_from_index = frame_tf_to_torch(camera_projection.world_from_index).to(torch.float64)
-    world_from_camera3d = frame_tf_to_torch(camera_projection.world_from_camera3d).to(torch.float64)
-    ray_origin = geo_to_torch(camera_projection.intrinsic.optical_center).to(torch.float64)
-    # Must be used with float64 else error of up to 1 ijk unit
-    ray_origin, direction = get_torch_projection_ray(world_from_index, world_from_camera3d, ray_origin)
-    camera_position = (ijkw @ torch.as_tensor(camera_projection.center_in_world.data).to(ijkw))[:-1]
-    planes_intersections, planes_intersections_mask = intersect_ray_box(ray_origin, direction, ijk_from_world, roi3D)
-    planes_intersections_idx = torch.where(planes_intersections_mask.sum(-1) == 2)[0]
-    if len(planes_intersections_idx) != 2:
-        raise ValueError(f"The camera principal ray must intersect the disp_roi 3D in 2 points, not {len(planes_intersections_idx)}")
-    distances = torch.linalg.norm(planes_intersections[planes_intersections_idx] - camera_position, dim=-1)
-    closest_plane_idx = planes_intersections_idx[distances.argmin()]
-    farthest_plane_idx = planes_intersections_idx[distances.argmax()]
-    # To get the biggest 2D roi while keeping all points of the 2D roi inside the 3D roi, 
-    # select the corners of the farthest plane, make rays to the camera origin, intersect the rays with the closest plane and project in 2D
-    plane_points_idx = torch.tensor([[(0,l[0],l[1]) for l in prod([0,1],[0,1])],
-                                    [(l[0],0,l[1]) for l in prod([0,1],[0,1])],
-                                    [(l[0],l[1],0) for l in prod([0,1],[0,1])],
-                                    [(1,l[0],l[1]) for l in prod([0,1],[0,1])],
-                                    [(l[0],1,l[1]) for l in prod([0,1],[0,1])],
-                                    [(l[0],l[1],1) for l in prod([0,1],[0,1])],
-                                ])
-    plane_points = make3DGrid((2,2,2), roi3D[:3], roi3D[3:], sparse=False).to(wijk).permute(1,2,3,0)
-    farthest_points_idx = plane_points_idx[farthest_plane_idx]
-    farthest_points = plane_points[farthest_points_idx[:,0],
-                                   farthest_points_idx[:,1],
-                                   farthest_points_idx[:,2]]
-    rays = farthest_points - camera_position
-    rays_intersections, _ = intersect_ray_box(ijk_from_world, world_from_ijk, camera_position, rays, roi3D)
-    closest_points = rays_intersections[:,closest_plane_idx]
-    
-    if check_plot:
-        fig, ax = make_3D_plot()
-        ax.scatter(*farthest_points.T)
-        ax.scatter(*camera_position, color='red')
-        ax.plot(*torch.cat((farthest_points, camera_position.unsqueeze(0)), dim=0).T, color='blue')
-        lines = [np.stack([camera_position.cpu().numpy(), corner]) for corner in farthest_points]
-        for l in lines:
-            ax.plot(*l.T, color='violet')
-        ax.scatter(*closest_points.T)
-        ax.plot(*plane_points[plane_points_idx[closest_plane_idx][:,0],
-                    plane_points_idx[closest_plane_idx][:,1],
-                    plane_points_idx[closest_plane_idx][:,2],].T)
-        
-    closest_points_2D = torch.einsum('ab,nb->na',
-                                 torch.as_tensor(camera_projection.index_from_world.data).to(wijk) @ wijk,
-                                 closest_points)
-    closest_points_2D = closest_points_2D[:,:-1] / closest_points_2D[:,-1:]
-    roi2D = closest_points_2D.amin(0).ceil().int().tolist() + closest_points_2D.amax(0).floor().int().tolist()
-    roi2D = np.clip(roi2D, 0, camera_projection.intrinsic.sensor_size[0] - 1)
-    return roi2D
-
-
 def ConvertHUVolumeToDdrr(ddrr_volume, hu_volume):
     ddrr_volume.materials = ddrr_volume._format_materials(ddrr_volume._segment_materials(hu_volume))
     ddrr_volume.data = np.array(ddrr_volume._convert_hounsfield_to_density(hu_volume)).astype(np.float32)
@@ -616,12 +560,12 @@ def plot_grid3D_cube(grid_min, grid_max, fig=None, ax=None, color = 'red'):
     return fig, ax
 
 
-def Visualize(volume, camera_projection, disp_roi, disp_roi_2D):
+def Visualize(volume, camera_projection, disp_roi, roi_2D):
     camera_position = geo_to_torch(volume.ijk_from_world @ camera_projection.center_in_world)[:-1].to(torch.float64)
     # Intersection points between the projection lines of the 2D roi and the volume
     p2d_corners = torch_to_point(torch.as_tensor(np.stack(np.meshgrid(
-                                np.linspace(disp_roi_2D[0], disp_roi_2D[2]-1, 2),
-                                np.linspace(disp_roi_2D[1], disp_roi_2D[3]-1, 2),
+                                np.linspace(roi_2D[0], roi_2D[2]-1, 2),
+                                np.linspace(roi_2D[1], roi_2D[3]-1, 2),
                                 indexing='ij')).reshape(2, -1).T, dtype=torch.float64), dim=-1)
     p3d_corners = project_2d_points_vol(geo_to_torch(volume.ijk_from_world).to(torch.float64), 
                                           geo_to_torch(camera_projection.world_from_index).to(torch.float64), 
