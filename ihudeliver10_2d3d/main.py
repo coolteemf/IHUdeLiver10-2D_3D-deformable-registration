@@ -7,9 +7,9 @@ import numpy as np
 import nibabel as nib
 from skimage import io
 import matplotlib.pyplot as plt
-from utils import Visualize, check_disp_roi_invisible, disp_roi_from_img_roi, roi2D_from_roi3D, roi3D_from_center, roi3D_from_segmentation, \
+from utils import Visualize, disp_roi_from_img_roi, roi3D_from_center, roi3D_from_segmentation, \
                   load_volume_data, define_camera_matrix, project, crop_ddrr_volume, \
-                  crop_roi, crop_from_roi_2D, plot_img
+                  crop_roi, plot_img
 import killeengeo as geo
 
 def main(volume_path: str, 
@@ -78,12 +78,14 @@ def main(volume_path: str,
                                      max_disp_vox, 
                                      img_roi,
                                      allow_disp_outside_roi)
+    print(f"disp_roi: {disp_roi}")                   
+    print(f"img_roi: {img_roi}")
 
     cproj = define_camera_matrix(volume=volume, image_size=projection_size, pixel_size=psize_resize,
                                  source_to_detector_distance=source_to_detector_distance,
                                  source_to_isocenter_distance=source_to_isocenter_distance,
-                                 center=center_vox, flip_up_down=flip_up_down,
-                                 camera_along_X=camera_along_X, source_posterior=source_posterior)
+                                 center=center_vox, IJK_index=IJK_index, flip_up_down=flip_up_down,
+                                 source_posterior=source_posterior)
 
     p_original = project(cproj, volume, source_to_detector_distance, gamma=gamma)
     # Crop the volume to the visible part to speed up projection and reduce memory usage
@@ -92,13 +94,6 @@ def main(volume_path: str,
     disp_roi = crop_roi(disp_roi, img_roi)
     p_volume_crop_3D = project(cproj, volume, source_to_detector_distance, gamma=gamma)
 
-    # The roi_2D is defined as the biggest roi such that no points outside the disp_roi are in it
-    # The camera projection is cropped to the roi_2D
-    roi_2D = roi2D_from_roi3D(disp_roi, cproj, volume.world_from_ijk, volume.ijk_from_world)
-    img_crop = crop_from_roi_2D(roi_2D)
-    p_crop = p_volume_crop_3D[img_crop[0]:img_crop[1], img_crop[2]:img_crop[3]]
-    p_pad = np.zeros_like(p_volume_crop_3D)
-    p_pad[img_crop[0]:img_crop[1], img_crop[2]:img_crop[3]] = p_crop
     # If files already exist, increment the index
     it = 0
     while os.path.exists(os.path.join(save_path, f"{name}_intrinsic_{it}.npy")):
@@ -107,9 +102,7 @@ def main(volume_path: str,
     if display:
         plot_img(p_original, title=f"original projection")
         plot_img(p_volume_crop_3D, title="projection volume cropped")
-        plot_img(p_crop, title="projection 2D cropped")
-        plot_img(p_pad, title="projection 2D cropped padded")
-        Visualize(volume, cproj, disp_roi, roi_2D)
+        Visualize(volume, cproj, disp_roi, [0,0,projection_size[0],projection_size[1]])
         # check_disp_roi_invisible(volume, disp_roi, cproj, source_to_detector_distance, gamma, img_crop, p_volume_crop_3D)
         plt.show()
 
@@ -119,8 +112,6 @@ def main(volume_path: str,
         np.save(os.path.join(save_path, f"{name}_worldfromanat_{it}.npy"), volume.world_from_anatomical.data)
         io.imsave(os.path.join(save_path, f"{name}_poriginal_{it}.png"),
                   np.round(p_original * 255).astype(np.uint8))
-        io.imsave(os.path.join(save_path, f"{name}_pimgcrop_{it}.png"),
-                  np.round(p_pad * 255).astype(np.uint8))
         io.imsave(os.path.join(save_path, f"{name}_pvolumecrop_{it}.png"),
                   np.round(p_volume_crop_3D * 255).astype(np.uint8))
         with open(os.path.join(save_path, f"{name}_projection_parameters_{it}.json"), 'w') as f:
@@ -138,7 +129,6 @@ def main(volume_path: str,
                        "volume_name": volume_name,
                        "img_roi": img_roi.tolist(),
                        "disp_roi": disp_roi_uncrop.tolist(),
-                       "roi_2D": roi_2D.tolist(),
                        "pixel_size_resize": psize_resize,
                        "intrinsic": cproj.intrinsic.data.tolist(),
                        "extrinsic": cproj.extrinsic.data.tolist(),
@@ -146,7 +136,7 @@ def main(volume_path: str,
                       f,
                       indent=0)
 
-    print(f"img_roi: {img_roi}\nroi_2D: {roi_2D}\ndisp_roi: {disp_roi_uncrop}\n"
+    print(f"img_roi: {img_roi}\ndisp_roi: {disp_roi_uncrop}\n"
           f"pixel_size: {psize_resize}\n"
           f"iteration {it}")
 
@@ -169,13 +159,13 @@ if __name__ == "__main__":
                         help='Distance between the bounds of the organ segmentation and the bounds of the roi.')
     parser.add_argument('--name', type=str, default=None,
                         help='Name of the output.')
-    parser.add_argument('--source_to_detector_distance', type=float, default=1500,
+    parser.add_argument('--source_to_detector_distance', type=float, default=1100,
                         help='The distance between the X-ray source and the detector.')
     parser.add_argument('--source_to_isocenter_distance', type=float, default=1050,
                         help='The distance from the source to the isocenter.')
-    parser.add_argument('--detector_size', nargs='+', type=int, default=(2330, 2330),
+    parser.add_argument('--detector_size', nargs='+', type=int, default=(768, 768),
                         help='Size of the detector.')
-    parser.add_argument('--pixel_size', nargs='+', type=float, default=(0.148, 0.148),
+    parser.add_argument('--pixel_size', nargs='+', type=float, default=(0.388, 0.388),
                         help='Size of the pixel.')
     parser.add_argument('--projection_size', nargs='+', type=int, default=(512, 512),
                         help='Size of the projection.')
