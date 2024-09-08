@@ -32,6 +32,11 @@ def main(volume_path: str,
          save: bool,
          source_posterior: bool,
          allow_disp_outside_roi: bool):
+    try:
+        from deepdrr import Projector
+    except ImportError:
+        print("deepdrr is required")
+        quit()
     ### CUDA path needs to be in path
     os.environ['PATH'] = f'{cuda_path}:' + os.environ['PATH']
     ### Check that the segmentation is aligned to volume
