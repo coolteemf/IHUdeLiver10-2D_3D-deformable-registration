@@ -45,7 +45,7 @@ def main(volume_path: str,
     downscale_factor = detector_size[0] / projection_size[0]
     psize_resize = (pixel_size[0] * downscale_factor,) * 2  # update the pixel size to account for downscale
     if center is None:
-        print("WARNING: center is not supplied, organ segmentation will be used to compute the roi automatically.")
+        print("WARNING: center is not supplied, center will be set to the center of the volume")
 
     assert os.path.exists(volume_path)
     # If no name is provided, use the name of the volume
@@ -62,7 +62,8 @@ def main(volume_path: str,
     # Compute the img_roi which will contain the voxels to be used for the deformation
     # and the disp_roi in which the displacements will be observed
     max_disp_vox = np.ones(3) * max_disp / volume.spacing.__array__()
-    if center is None:
+    if segmentation_path is not None:
+        print("Segmentation path is provided, using segmentation to define the center and the ROI")
         assert seg_margin is not None
         seg_margin_vox = np.array(seg_margin) / volume.spacing.__array__()
         assert os.path.exists(segmentation_path)
@@ -70,6 +71,9 @@ def main(volume_path: str,
             load_volume_data(segmentation_path),
             volume, seg_margin_vox, max_disp_vox, IJK_index)    
     else:
+        if center is None:
+            # Set the center to the center of the volume
+            center = volume.world_from_ijk @  geo.point([s / 2 for s in volume.shape])
         center_vox, img_roi = roi3D_from_center(roi_size, center, volume)
         
     center = np.array(volume.world_from_ijk @ geo.point(center_vox))
