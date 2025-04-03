@@ -567,23 +567,27 @@ def Visualize(volume, camera_projection, disp_roi, roi_2D):
                                 np.linspace(roi_2D[0], roi_2D[2]-1, 2),
                                 np.linspace(roi_2D[1], roi_2D[3]-1, 2),
                                 indexing='ij')).reshape(2, -1).T, dtype=torch.float64), dim=-1)
-    p3d_corners = project_2d_points_vol(geo_to_torch(volume.ijk_from_world).to(torch.float64), 
+    intersection_dict = project_2d_points_vol(geo_to_torch(volume.ijk_from_world).to(torch.float64), 
                                           geo_to_torch(camera_projection.world_from_index).to(torch.float64), 
                                           geo_to_torch(camera_projection.world_from_camera3d).to(torch.float64),
                                           p2d_corners,
-                                          volume.shape,
+                                          volume_shape=volume.shape,
                                         #   min_box=torch_to_point(torch.tensor(disp_roi[:3], dtype=torch.float64)),
                                         #   max_box=torch_to_point(torch.tensor(disp_roi[3:], dtype=torch.float64))
-                                                               )['intersections'].numpy()
-    lines = [np.stack([camera_position.cpu().numpy(), corner]) for corner in p3d_corners]
+                                                               )
+    p3d_corners = intersection_dict['intersections'].numpy()
+    # Masking the points that are behind the camera
+    camera_normal = camera_projection.extrinsic[2, :3]
+    mask = np.einsum('i, ...i -> ...', camera_normal, p3d_corners - camera_position.numpy()) < 0 # Inverted because the camera position is actually the light source for X-ray projection
+    p3d_corners =  [i[m].numpy() for i,m in zip(intersection_dict['intersections'], mask)]
     
+    # Define projection lines corresponding to the corners 2D roi
+    lines = [np.concatenate([camera_position.cpu().numpy()[None], corner], axis=0) for corner in p3d_corners]
     fig, ax = plot_grid3D_cube(disp_roi[:3], disp_roi[3:], color='orange')
-    # fig, ax = plot_ray_box(disp_roi, fig, ax, color1='green', color2='green')  
     ax.plot(*camera_position, '.', color='red')
     for l in lines:
         ax.plot(*l.T, color='violet')
-    ax.set_title(f"Disp roi 3D (orange), camera position(red), projection of the 2D roi in the volume (violet),\n"
-                 f"The projection of the 2D roi in the volume should be fully contained in the disp roi 3D (orange)",
+    ax.set_title(f"Disp roi 3D (orange), camera position(red), projection of the 2D roi in the volume (violet)",
                  fontsize=10)
     return fig, ax
 
