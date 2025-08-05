@@ -167,8 +167,8 @@ def apply_volume_rotation_to_camera_proj(camera_projection: CameraProjection, vo
 
 
 def define_camera_matrix(volume, image_size: tuple, pixel_size: tuple, source_to_detector_distance: float,
-                         source_to_isocenter_distance: float, center: np.ndarray, flip_up_down: bool=False,
-                         camera_along_X: bool=False, source_posterior: bool=False):
+                         source_to_isocenter_distance: float, center: np.ndarray, IJK_index: int, flip_up_down: bool=False,
+                         source_posterior: bool=False):
     """Define camera position and orientation.
     camera_along_X: if False, camera will be oriented along the J axis of the volume in IJK space, else along the I axis.
     """
